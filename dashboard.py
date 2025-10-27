@@ -5,6 +5,8 @@ import os
 import base64
 from glob import glob
 from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -113,7 +115,7 @@ def compute_bmi(height_cm, weight_kg):
         return round(weight_kg / (height_cm/100)**2, 1)
     return None
 
-# ---------- Plotly visual helpers you provided (wired in) ----------
+# ---------- Plotly visual helpers ----------
 def risk_category(score: float):
     if score < 33:
         return "Low", "#22c55e"    # green
@@ -221,16 +223,35 @@ def chip(text, color):
         """, unsafe_allow_html=True
     )
 
-# ---------- Global background helpers ----------
+# ---------- Global background helpers (robust for cloud deploys) ----------
 def find_background_image() -> str | None:
-    preferred = ["background.jpg", "hero.jpg", "background.png", "hero.png"]
-    for p in preferred:
-        if os.path.exists(p):
-            return p
-    for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
-        matches = glob(ext)
-        if matches:
-            return matches[0]
+    """
+    Look for a background image in common locations relative to this file.
+    Returns an absolute path string if found, else None.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here / "background.jpg",
+        here / "background.png",
+        here / "hero.jpg",
+        here / "hero.png",
+        here / "assets" / "background.jpg",
+        here / "assets" / "background.png",
+        here / "static" / "background.jpg",
+        here / "static" / "background.png",
+    ]
+
+    # As a last resort, scan for common image types in the app folder
+    if not any(p.exists() for p in candidates):
+        for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
+            globbed = list(here.glob(ext))
+            if globbed:
+                candidates = [globbed[0]]
+                break
+
+    for p in candidates:
+        if p.exists():
+            return str(p)
     return None
 
 def apply_global_background(img_path: str):
@@ -241,8 +262,7 @@ def apply_global_background(img_path: str):
         f"""
         <style>
         .stApp {{
-            background: url("data:{mime};base64,{b64}") no-repeat center center fixed;
-            background-size: cover;
+            background: url("data:{mime};base64,{b64}") center center / cover no-repeat fixed;
         }}
         .stApp::before {{
             content: "";
@@ -274,8 +294,9 @@ if "inputs" not in st.session_state:
 _bg = find_background_image()
 if _bg:
     apply_global_background(_bg)
+    st.caption(f"Background image loaded from: `{_bg}`")
 else:
-    st.warning("Place a background image (e.g., 'background.jpg') next to app.py for a full-page background.")
+    st.warning("No background image found. Place `background.jpg` next to `app.py` or in `assets/` or `static/`.")
 
 # ------------------------
 # Sidebar navigation
